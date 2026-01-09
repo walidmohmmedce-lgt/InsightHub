@@ -2,8 +2,9 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User.model");
-const protect = require("../middleware/auth.middleware");
 
+// ✅ SINGLE, CORRECT IMPORT
+const { protect, adminOnly } = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
@@ -18,19 +19,14 @@ router.post("/users", async (req, res) => {
       id: user._id,
       name: user.name,
       email: user.email,
+      role: user.role,
       createdAt: user.createdAt,
     });
   } catch (error) {
-    res.status(400).json({
-      error: error.message,
-    });
+    res.status(400).json({ error: error.message });
   }
 });
 
-
-router.get("/profile", protect, async (req, res) => {
-  res.json(req.user);
-});
 // ==============================
 // LOGIN USER + JWT
 // ==============================
@@ -38,28 +34,24 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // 1. Find user & include password
     const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    // 2. Compare passwords
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    // 3. Generate JWT
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
-    // 4. Send response
     res.json({
       message: "Login successful",
       token,
@@ -67,11 +59,30 @@ router.post("/login", async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// ==============================
+// PROFILE (PROTECTED)
+// ==============================
+router.get("/profile", protect, (req, res) => {
+  res.json(req.user);
+});
+
+// ==============================
+// ADMIN ONLY
+// ==============================
+router.get("/admin", protect, adminOnly, (req, res) => {
+  res.json({
+    message: "Welcome Admin 👑",
+    user: req.user,
+  });
+});
+
 
 module.exports = router;
